@@ -44,6 +44,8 @@ except Exception as e:
     traceback.print_exc()
     engine = None
 
+
+
 # ==========================================
 # 2. MODELS
 # ==========================================
@@ -275,6 +277,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Smart Conveyor Belt System", lifespan=lifespan)
 
+origins = ["http://localhost:5173", "*","https://automaticconveyorbeltroutersystemdesign.onrender.com"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
