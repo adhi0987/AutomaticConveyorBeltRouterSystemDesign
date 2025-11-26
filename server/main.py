@@ -1,21 +1,9 @@
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
-import pandas as pd
-import numpy as np
-import tensorflow as tf
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Embedding, Flatten, Concatenate, Dense, Dropout
-from sklearn.model_selection import train_test_split
-import pytesseract
-from PIL import Image
+import os
 import io
 import random
-import string
-import os
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 
 # ==========================================
 # 1. CONFIGURATION & DATABASE
@@ -24,12 +12,7 @@ import os
 # Your Supabase Connection URL
 # CSV File Path
 CSV_FILE = "parcels_10000.csv"
-MODEL_PATH = "routing_model.h5"
-MAX_CITY_ID = 10000  # Adjust if city IDs exceed this
 
-# Database Setup
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # FastAPI App Setup
 app = FastAPI(title="Smart Conveyor Belt System")
@@ -42,39 +25,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# ==========================================
-# 2. DATA MODELS (Pydantic)
-# ==========================================
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-class NewUserRequest(BaseModel):
-    email: str
-
-class UpdateProfileRequest(BaseModel):
-    user_id: int
-    new_username: str
-    new_password: str
-
-class CityRequest(BaseModel):
-    city_name: str
-
-class DataPointRequest(BaseModel):
-    source_city_id: int
-    source_city_name: str
-    destination_city_id: int
-    destination_city_name: str
-    parcel_type: int
-    route_direction: int
-
-class PredictionRequest(BaseModel):
-    source_city_id: int
-    destination_city_id: int
-    parcel_type: int
-
 # ==========================================
 # 3. HELPER FUNCTIONS & DEPENDENCIES
 # ==========================================
@@ -87,85 +37,6 @@ def get_db():
     finally:
         db.close()
 
-def load_ai_model():
-    """Loads the trained Keras model if it exists."""
-    if os.path.exists(MODEL_PATH):
-        try:
-            return tf.keras.models.load_model(MODEL_PATH)
-        except Exception as e:
-            print(f"Error loading model: {e}")
-            return None
-    return None
-
-# Global Model Variable
-model = load_ai_model()
-
-def train_model_pipeline():
-    """
-    Reads data from CSV and Database, combines them,
-    trains a new Neural Network, and saves it.
-    """
-    print("Starting Model Retraining...")
-    
-    # 1. Load CSV Data
-    if os.path.exists(CSV_FILE):
-        df_csv = pd.read_csv(CSV_FILE)
-    else:
-        df_csv = pd.DataFrame(columns=['source_city_ID', 'destination_city_ID', 'parcel_type', 'route'])
-
-    # 2. Load DB Data
-    db = SessionLocal()
-    try:
-        query = text("SELECT source_city_id, destination_city_id, parcel_type, route_direction FROM datapoints")
-        results = db.execute(query).fetchall()
-        
-        if results:
-            df_db = pd.DataFrame(results, columns=['source_city_ID', 'destination_city_ID', 'parcel_type', 'route'])
-            full_df = pd.concat([df_csv, df_db], ignore_index=True)
-        else:
-            full_df = df_csv
-    except Exception as e:
-        print(f"Database read error during training: {e}")
-        full_df = df_csv
-    finally:
-        db.close()
-
-    if len(full_df) < 100:
-        print("Not enough data to train.")
-        return 0
-
-    # 3. Preprocess
-    X_src = full_df['source_city_ID'].values
-    X_dst = full_df['destination_city_ID'].values
-    X_type = full_df['parcel_type'].values
-    y = full_df['route'].values
-
-    # 4. Build Neural Network
-    src_input = Input(shape=(1,), name='src_in')
-    dst_input = Input(shape=(1,), name='dst_in')
-    type_input = Input(shape=(1,), name='type_in')
-
-    embedding = Embedding(input_dim=MAX_CITY_ID + 5000, output_dim=32)
-    src_emb = Flatten()(embedding(src_input))
-    dst_emb = Flatten()(embedding(dst_input))
-
-    merged = Concatenate()([src_emb, dst_emb, type_input])
-    x = Dense(64, activation='relu')(merged)
-    x = Dropout(0.2)(x)
-    x = Dense(32, activation='relu')(x)
-    output = Dense(3, activation='softmax')(x)
-
-    new_model = Model(inputs=[src_input, dst_input, type_input], outputs=output)
-    new_model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-
-    # 5. Train
-    new_model.fit([X_src, X_dst, X_type], y, epochs=5, batch_size=32, verbose=0)
-    
-    # 6. Save
-    new_model.save(MODEL_PATH)
-    print("Model saved.")
-    
-    return len(full_df)
 
 # ==========================================
 # 4. STARTUP EVENT (Seeding)
@@ -385,6 +256,3 @@ async def extract_data(file: UploadFile = File(...)):
         return {"extracted_text": text_out, "parsed_data": data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Image processing failed: {str(e)}")
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
