@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # IMPORT THIS
 import pandas as pd
 import pytesseract
 import cv2
@@ -16,53 +16,33 @@ import random
 import string
 import os
 import traceback
-import logging
-import sys
 
 # ==========================================
-# 1. LOGGING & CONFIGURATION
+# 1. CONFIGURATION & DATABASE
 # ==========================================
 
-# Setup Production Logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[sys.stdout]
-)
-logger = logging.getLogger(__name__)
-
-# Load environment variables
+# Load environment variables from the .env file
 load_dotenv()
 
-# Configuration
+# Get the URL securely
 DATABASE_URL = os.getenv("DATABASE_URL")
-DEBUG_MODE = os.getenv("DEBUG", "False").lower() == "true"
+
 CSV_FILE = "parcels_10000.csv"
 
-# Global Cache
+# Global Cache for O(1) Routing Lookup
 ROUTE_CACHE = {}
-
-# Database Setup with Production Pooling
-engine = None
-SessionLocal = None
 
 try:
     if not DATABASE_URL:
-        logger.critical("DATABASE_URL is missing in .env file!")
-    else:
-        # pool_pre_ping=True is CRITICAL for production (auto-reconnects if DB closes connection)
-        engine = create_engine(
-            DATABASE_URL, 
-            pool_size=10, 
-            max_overflow=20, 
-            pool_pre_ping=True 
-        )
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-        logger.info("Database engine initialized with connection pooling.")
+        raise ValueError("DATABASE_URL is not set. Please check your .env file.")
+        
+    engine = create_engine(DATABASE_URL)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    print("Database engine created successfully.")
 except Exception as e:
-    logger.critical(f"Database Connection Failed: {e}")
-    if DEBUG_MODE:
-        traceback.print_exc()
+    print(f"CRITICAL: Database Connection Error: {e}")
+    traceback.print_exc()
+    engine = None
 
 # ==========================================
 # 2. MODELS
@@ -103,8 +83,8 @@ class FindRouteRequest(BaseModel):
 # ==========================================
 
 def get_db():
-    if not SessionLocal:
-        raise HTTPException(status_code=500, detail="Database not initialized")
+    if not engine:
+        raise HTTPException(status_code=500, detail="Database not configured")
     db = SessionLocal()
     try:
         yield db
@@ -115,23 +95,24 @@ def refresh_route_cache():
     global ROUTE_CACHE
     temp_cache = {}
     
-    logger.info("Refreshing route cache...")
+    print("[Cache] Refreshing route cache...")
     
-    # 1. Load CSV (Fallback)
+    # 1. Load CSV (Fallback/Seed data)
     if os.path.exists(CSV_FILE):
         try:
             df = pd.read_csv(CSV_FILE)
             for _, row in df.iterrows():
                 key = (int(row['source_city_id']), int(row['destination_city_id']), int(row['parcel_type']))
                 temp_cache[key] = int(row['route_direction'])
-            logger.info(f"Loaded {len(df)} rules from CSV.")
+            print(f"[Cache] Loaded {len(df)} rules from CSV.")
         except Exception as e:
-            logger.error(f"CSV Load Error: {e}")
+            print(f"[Cache] CSV Load Error: {e}")
 
-    # 2. Load DB (Primary)
+    # 2. Load DB (Overrides CSV)
     if engine:
         try:
             with engine.connect() as conn:
+                # Ensure table exists before querying
                 conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS datapoints (
                         id SERIAL PRIMARY KEY,
@@ -147,85 +128,79 @@ def refresh_route_cache():
                 for row in rows:
                     key = (int(row[0]), int(row[1]), int(row[2]))
                     temp_cache[key] = int(row[3])
-                logger.info(f"Loaded {len(rows)} rules from DB.")
+                print(f"[Cache] Loaded {len(rows)} rules from DB.")
         except Exception as e:
-            logger.error(f"DB Cache Load Error: {e}", exc_info=True)
+            print(f"[Cache] DB Load Error: {e}")
+            traceback.print_exc()
 
     ROUTE_CACHE = temp_cache
-    logger.info(f"Total Active Rules in Cache: {len(ROUTE_CACHE)}")
+    print(f"[Cache] Total Active Rules: {len(ROUTE_CACHE)}")
     return len(ROUTE_CACHE)
 
 def process_image_cv(image_bytes):
-    try:
-        nparr = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        
-        if img is None:
-            raise ValueError("Could not decode image")
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    
+    img = cv2.resize(img, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    
+    custom_config = r'--oem 3 --psm 6' 
+    text_out = pytesseract.image_to_string(thresh, config=custom_config)
+    
+    data = {"source_city": None, "source_id": None, "dest_city": None, "dest_id": None, "type": 0}
+    clean_text = re.sub(r'[|/\[\]]', ' ', text_out)
 
-        img = cv2.resize(img, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        
-        custom_config = r'--oem 3 --psm 6' 
-        text_out = pytesseract.image_to_string(thresh, config=custom_config)
-        
-        data = {"source_city": None, "source_id": None, "dest_city": None, "dest_id": None, "type": 0}
-        clean_text = re.sub(r'[|/\[\]]', ' ', text_out)
-        
-        # Debug Log for OCR
-        if DEBUG_MODE:
-            logger.debug(f"OCR Extracted Text: {clean_text[:100]}...")
+    # Regex Logic
+    src_match = re.search(r'SOURCE(?!\s*_?ID)\s+([A-Z]+)', clean_text, re.IGNORECASE)
+    data['source_city'] = src_match.group(1) if src_match else None
+    
+    src_id_match = re.search(r'SOURCE_ID\s+(\d+)', clean_text, re.IGNORECASE)
+    if src_id_match:
+        data['source_id'] = int(src_id_match.group(1))
+    elif data['source_city']:
+        fallback = re.search(rf"{re.escape(data['source_city'])}.*?(\d+)", clean_text, re.IGNORECASE)
+        if fallback: data['source_id'] = int(fallback.group(1))
 
-        # Regex Logic
-        src_match = re.search(r'SOURCE(?!\s*_?ID)\s+([A-Z]+)', clean_text, re.IGNORECASE)
-        data['source_city'] = src_match.group(1) if src_match else None
-        
-        src_id_match = re.search(r'SOURCE_ID\s+(\d+)', clean_text, re.IGNORECASE)
-        if src_id_match:
-            data['source_id'] = int(src_id_match.group(1))
-        elif data['source_city']:
-            fallback = re.search(rf"{re.escape(data['source_city'])}.*?(\d+)", clean_text, re.IGNORECASE)
-            if fallback: data['source_id'] = int(fallback.group(1))
+    dst_match = re.search(r'DESTINATION(?!\s*_?ID)\s+([A-Z]+)', clean_text, re.IGNORECASE)
+    data['dest_city'] = dst_match.group(1) if dst_match else None
 
-        dst_match = re.search(r'DESTINATION(?!\s*_?ID)\s+([A-Z]+)', clean_text, re.IGNORECASE)
-        data['dest_city'] = dst_match.group(1) if dst_match else None
+    dst_id_match = re.search(r'DESTINATION_ID\s+(\d+)', clean_text, re.IGNORECASE)
+    if dst_id_match:
+        data['dest_id'] = int(dst_id_match.group(1))
+    elif data['dest_city']:
+        fallback = re.search(rf"{re.escape(data['dest_city'])}.*?(\d+)", clean_text, re.IGNORECASE)
+        if fallback: data['dest_id'] = int(fallback.group(1))
 
-        dst_id_match = re.search(r'DESTINATION_ID\s+(\d+)', clean_text, re.IGNORECASE)
-        if dst_id_match:
-            data['dest_id'] = int(dst_id_match.group(1))
-        elif data['dest_city']:
-            fallback = re.search(rf"{re.escape(data['dest_city'])}.*?(\d+)", clean_text, re.IGNORECASE)
-            if fallback: data['dest_id'] = int(fallback.group(1))
+    type_match = re.search(r'PARCEL_TYPE\s+([0-9loO]+)', clean_text, re.IGNORECASE)
+    if type_match:
+        val = type_match.group(1)
+        if val.lower() in ['lo', 'o', 'l']:
+            data['type'] = 0
+        else:
+            digits = re.search(r'\d+', val)
+            data['type'] = int(digits.group(0)) if digits else 0
 
-        type_match = re.search(r'PARCEL_TYPE\s+([0-9loO]+)', clean_text, re.IGNORECASE)
-        if type_match:
-            val = type_match.group(1)
-            if val.lower() in ['lo', 'o', 'l']:
-                data['type'] = 0
-            else:
-                digits = re.search(r'\d+', val)
-                data['type'] = int(digits.group(0)) if digits else 0
-
-        return data
-    except Exception as e:
-        logger.error(f"Image Processing Error: {e}", exc_info=True)
-        raise e
+    return data
 
 def sync_sequences(db: Session):
-    """Resets the Auto-Increment sequence to prevent duplicate key errors."""
+    """
+    FIX: Resets the Auto-Increment sequence for datapoints.
+    This prevents 'duplicate key value' errors.
+    """
     try:
-        logger.info("Syncing Database Sequences...")
+        print("[Startup] Syncing Database Sequences...")
+        # This SQL command tells Postgres to set the ID counter to the MAX ID + 1
         db.execute(text("SELECT setval(pg_get_serial_sequence('datapoints', 'id'), COALESCE((SELECT MAX(id) + 1 FROM datapoints), 1), false);"))
         db.commit()
-        logger.info("Sequences Synced Successfully.")
+        print("[Startup] Sequences Synced.")
     except Exception as e:
-        logger.warning(f"Could not sync sequences (Table might not exist yet): {e}")
+        print(f"[Startup Warning] Could not sync sequences: {e}")
         db.rollback()
 
 def init_db_data(db: Session):
     """Handles Table creation and Seeding"""
-    logger.info("Initializing Database Schema & Seeds...")
+    print("Running startup DB tasks...")
     try:
         # Create Tables
         db.execute(text("""
@@ -250,14 +225,14 @@ def init_db_data(db: Session):
         # Seed Admin
         admin_chk = db.execute(text("SELECT * FROM \"admin-logins\"")).fetchone()
         if not admin_chk:
-            logger.info("Seeding default admin account...")
+            print("Seeding default admin...")
             db.execute(text("INSERT INTO \"admin-logins\" (username, password, email) VALUES ('admin', 'admin123', 'admin@sys.com')"))
             db.commit()
 
         # Seed Cities
         city_count = db.execute(text("SELECT COUNT(*) FROM cities")).scalar()
         if city_count == 0 and os.path.exists(CSV_FILE):
-            logger.info("Seeding cities from CSV...")
+            print("Seeding cities from CSV...")
             df = pd.read_csv(CSV_FILE)
             src = df[['source_city_name', 'source_city_id']].rename(columns={'source_city_name': 'name', 'source_city_id': 'id'})
             dst = df[['destination_city_name', 'destination_city_id']].rename(columns={'destination_city_name': 'name', 'destination_city_id': 'id'})
@@ -268,10 +243,12 @@ def init_db_data(db: Session):
                 db.execute(text(f"INSERT INTO cities (unique_id, cityname) VALUES ({row['id']}, '{clean_name}') ON CONFLICT DO NOTHING"))
             db.commit()
             
+        # Fix sequences after creating tables/seeding
         sync_sequences(db)
 
     except Exception as seed_err:
-        logger.error(f"Seeding Failed: {seed_err}", exc_info=True)
+        print(f"Seeding Error: {seed_err}")
+        traceback.print_exc()
 
 # ==========================================
 # 4. LIFESPAN MANAGER
@@ -279,25 +256,20 @@ def init_db_data(db: Session):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- STARTUP ---
-    logger.info("Application Starting Up...")
+    # --- STARTUP LOGIC ---
     if engine:
         db = SessionLocal()
         try:
             init_db_data(db)
-        except Exception as e:
-            logger.error(f"Startup DB Error: {e}", exc_info=True)
         finally:
             db.close()
         
         refresh_route_cache()
     else:
-        logger.warning("No Database Engine - Skipping DB Tasks")
+        print("Skipping startup DB tasks - No Engine")
     
     yield
-    
-    # --- SHUTDOWN ---
-    logger.info("Application Shutting Down...")
+    # --- SHUTDOWN LOGIC ---
     if engine:
         engine.dispose()
 
@@ -305,7 +277,7 @@ app = FastAPI(title="Smart Conveyor Belt System", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In strict production, replace "*" with your frontend domain
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -315,26 +287,18 @@ app.add_middleware(
 # 5. ENDPOINTS
 # ==========================================
 
-@app.get("/health")
-def health_check():
-    """Simple endpoint to check if server is running"""
-    return {"status": "ok", "database": "connected" if engine else "disconnected"}
-
 @app.post("/login/{role}")
 def login(role: str, creds: LoginRequest, db: Session = Depends(get_db)):
     table = "admin-logins" if role == "admin" else "employee-logins"
     try:
-        # Parameterized query for security
         res = db.execute(text(f"SELECT id, username FROM \"{table}\" WHERE username=:u AND password=:p"), 
                          {"u": creds.username, "p": creds.password}).fetchone()
         if res:
-            logger.info(f"User {creds.username} logged in as {role}")
             return {"status": "success", "user_id": res[0], "username": res[1], "role": role}
-        
-        logger.warning(f"Failed login attempt for {creds.username} in {role}")
     except Exception as e:
-        logger.error("Login DB Error", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        print(f"Login DB Error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Database error during login")
         
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -354,11 +318,11 @@ def add_user(role: str, req: NewUserRequest, db: Session = Depends(get_db)):
         db.execute(text(f"INSERT INTO \"{table}\" (username, password, email) VALUES (:u, :p, :e)"), 
                    {"u": username, "p": password, "e": req.email})
         db.commit()
-        logger.info(f"Added new user {username} to {role}")
         return {"username": username, "password": password}
     except Exception as e:
-        logger.error("Add User Error", exc_info=True)
-        raise HTTPException(status_code=400, detail="Could not add user. Email or User might exist.")
+        print(f"Add User Error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.delete("/remove-user/{role}/{uid}")
 def remove_user(role: str, uid: int, db: Session = Depends(get_db)):
@@ -394,19 +358,21 @@ def add_city(req: CityRequest, db: Session = Depends(get_db)):
         db.commit()
         return {"status": "success", "new_id": new_id}
     except Exception as e:
-        logger.error(f"Add City Error: {e}")
+        print(f"Add City Error: {e}")
         raise HTTPException(status_code=400, detail="City likely exists")
 
 @app.get("/datapoints")
 def get_datapoints(db: Session = Depends(get_db)):
+    # LIMIT to 100 to prevent overloading
     res = db.execute(text("SELECT source_city_id, source_city_name, destination_city_id, destination_city_name, parcel_type, route_direction FROM datapoints ORDER BY id DESC LIMIT 100")).fetchall()
     return [{"source_id": r[0], "source_name": r[1], "dest_id": r[2], "dest_name": r[3], "type": r[4], "route": r[5]} for r in res]
 
 @app.post("/add-datapoint")
 def add_datapoint(d: DataPointRequest, db: Session = Depends(get_db)):
     try:
-        logger.debug(f"Inserting: {d.source_city_id} -> {d.destination_city_id} ({d.parcel_type})")
+        print(f"Attempting to insert: Src={d.source_city_id}, Dst={d.destination_city_id}, Type={d.parcel_type}")
         
+        # INSERT without 'id' - let Postgres handle it (now that sequence is fixed)
         db.execute(text("""
             INSERT INTO datapoints (source_city_id, source_city_name, destination_city_id, destination_city_name, parcel_type, route_direction)
             VALUES (:sid, :sn, :did, :dn, :pt, :rd)
@@ -419,20 +385,22 @@ def add_datapoint(d: DataPointRequest, db: Session = Depends(get_db)):
             "rd": d.route_direction
         })
         db.commit()
+        print("Insert successful. Refreshing cache...")
         
         refresh_route_cache()
         return {"status": "success"}
     except Exception as e:
-        logger.error("Error in add_datapoint", exc_info=True)
+        print("!!! ERROR IN ADD_DATAPOINT !!!")
+        traceback.print_exc()
         
-        # Emergency auto-fix for sequence issues
+        # If insertion fails due to PK error, try one emergency sync
         if "UniqueViolation" in str(e) or "duplicate key" in str(e):
-            logger.warning("Duplicate Key Detected - Attempting Auto-Fix")
+            print("Detected Sequence Desync. Attempting emergency fix...")
             db.rollback()
             sync_sequences(db)
-            raise HTTPException(status_code=500, detail="Database error (Auto-Corrected). Please Try Again.")
+            raise HTTPException(status_code=500, detail="Database sequence error. Please try again (System auto-corrected).")
 
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/refresh-data")
 def refresh_data_endpoint():
@@ -448,7 +416,6 @@ def find_route(req: FindRouteRequest):
         mapping = {0: "Straight", 1: "Left", 2: "Right"}
         return {"found": True, "route_code": route_idx, "direction": mapping.get(route_idx, "Unknown")}
     else:
-        logger.info(f"Route not found for key: {key}")
         return {"found": False, "route_code": -1, "direction": "Route Not Found in Database"}
 
 @app.post("/extract-from-image")
@@ -458,13 +425,9 @@ async def extract_api(file: UploadFile = File(...)):
         data = process_image_cv(content)
         return data
     except Exception as e:
-        logger.error("Image Extraction Failed", exc_info=True)
-        if DEBUG_MODE:
-             # In debug mode, show the full error
-            raise HTTPException(status_code=500, detail=str(e))
-        else:
-             # In prod, show a generic error
-            raise HTTPException(status_code=500, detail="Error processing image")
+        print(f"Image Extraction Error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 # if __name__ == "__main__":
 #     uvicorn.run(app, host="0.0.0.0", port=8000)
