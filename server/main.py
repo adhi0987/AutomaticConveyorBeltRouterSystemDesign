@@ -10,6 +10,8 @@ import pandas as pd
 import pytesseract
 import cv2
 import numpy as np
+# explicitly set the path to the Tesseract executable
+pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
 import re
 import io
 import random
@@ -25,8 +27,6 @@ import traceback
 load_dotenv()
 
 
-# explicitly set the path to the Tesseract executable
-pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
 
 # Get the URL securely
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -281,10 +281,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Smart Conveyor Belt System", lifespan=lifespan)
 
-origins = ["http://localhost:5173", "*","https://automaticconveyorbeltroutersystemdesign.onrender.com"]
+origins = ["http://localhost:5173", "https://automaticconveyorbeltroutersystemdesign-l3l8.onrender.com","https://automaticconveyorbeltroutersystemdesign.onrender.com"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
