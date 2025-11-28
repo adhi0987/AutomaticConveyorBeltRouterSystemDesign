@@ -7,10 +7,10 @@
     justify-content: space-between;
     align-items: center;
     position: fixed;
-    width: 90%;
+    width: 95%;
     top: 0;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
-    z-index: -1;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 5);
+    z-index: 500;
     box-sizing: border-box;
 }
 
