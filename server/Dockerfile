@@ -1,24 +1,20 @@
-# Use the official Python 3.13 slim image (matches your current version)
-FROM python:3.13-slim
-
-# 1. Install system dependencies
-# We need tesseract-ocr for text extraction
-# We usually need ffmpeg or libsm6/libxext6 for OpenCV (even headless versions sometimes)
 # server/Dockerfile
+
 FROM python:3.13-slim
 
-# 1. Install system dependencies
-# Force install Tesseract-OCR, its dev libraries, and run-time libraries
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 1. Install system dependencies in a single, clean layer
+# Note: This is an improved version of your existing RUN block.
+# We ensure tesseract-ocr is installed.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-eng \
     libtesseract-dev \
     libgl1-mesa-glx \
     libglib2.0-0 \
     libsm6 \
-    && rm -rf /var/lib/apt/lists/*
-
-# ... (rest of your Dockerfile remains the same)
+    libxext6 && \
+    rm -rf /var/lib/apt/lists/*
 
 # 2. Set the working directory
 WORKDIR /app
