@@ -1,42 +1,276 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+/* --- Navbar --- */
+.navbar {
+    background: var(--primary);
+    color: white;
+    padding: 1rem 1.5rem; /* Reduced padding for mobile */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: fixed;
+    width: 98%;
+    top: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+    z-index: -1;
+    box-sizing: border-box;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.nav-brand {
+    font-size: 1.25rem; /* Slightly smaller on mobile */
+    font-weight: 700;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.nav-links {
+    display: none; /* Hide standard links on mobile */
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.nav-links a {
+    color: white;
+    text-decoration: none;
+    margin-left: 1.5rem;
+    font-weight: 500;
+    transition: opacity 0.2s;
+}
+
+.nav-links a:hover {
+    opacity: 0.8;
+}
+
+.logout-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    margin-left: 1rem;
+    padding: 0.5rem 1rem;
+}
+
+/* --- Layout --- */
+.main-wrapper {
+    margin-top: 60px; /* Reduced margin-top for mobile */
+    padding: 1rem; /* Reduced padding for mobile */
+    min-height: calc(100vh - 60px);
 }
 
 .card {
-  padding: 2em;
+    background: var(--card-bg);
+    padding: 1.5rem; /* Reduced padding for mobile */
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    margin-bottom: 1.5rem;
 }
 
-.read-the-docs {
-  color: #888;
+/* --- Dashboard (Primary Responsiveness) --- */
+.dashboard {
+    display: flex;
+    gap: 1.5rem;
+    max-width: 100%;
+    margin: 0 auto;
+    flex-direction: column; /* Stack sidebar and content vertically on mobile */
+    flex-wrap: wrap;
+}
+
+.sidebar {
+    flex: 1 1 100%;
+    display: flex;
+    flex-direction: row; /* Horizontal tabs on mobile */
+    gap: 0.5rem;
+    overflow-x: auto; /* Allow horizontal scrolling */
+    padding-bottom: 0.5rem;
+}
+
+.sidebar button {
+    flex-shrink: 0;
+    text-align: center;
+    background: white;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    padding: 0.75rem 1rem;
+}
+.sidebar button.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.content {
+    flex: 1 1 100%;
+    min-width: 0;
+}
+
+/* --- Forms & Tables --- */
+input, select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    margin-bottom: 0.75rem;
+    box-sizing: border-box;
+    font-size: 1rem;
+}
+
+button {
+    background: var(--primary);
+    color: white;
+    padding: 0.75rem 1.25rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: background 0.2s;
+}
+button:hover {
+    filter: brightness(110%);
+}
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.danger-btn { background: var(--error); }
+.warning-btn { background: #f59e0b; }
+.add-btn { width: 100%; margin-top: 1rem; }
+
+.data-table {
+    display: block; /* Allows overflow on mobile */
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    border-collapse: collapse;
+    margin-top: 1.5rem;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.data-table th {
+    background: #f8fafc;
+    color: #64748b;
+    font-weight: 600;
+    text-align: left;
+    padding: 1rem;
+}
+.data-table td {
+    padding: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+.data-table table {
+    min-width: 600px;
+}
+
+
+/* --- User Home --- */
+.home-container { 
+    max-width: 100%; 
+    margin: 0 auto; 
+    text-align: center; 
+}
+.hero h1 { color: var(--primary); margin-bottom: 0.5rem; }
+.upload-section { margin: 2rem auto; max-width: 500px; }
+
+.results-grid {
+    display: flex; /* Stack results vertically on mobile */
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    text-align: left;
+}
+.result-card.found { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; text-align: center; }
+.result-card.error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; text-align: center; }
+.direction-arrow { font-size: 2rem; font-weight: 800; margin: 1rem 0; }
+
+/* Data Entry Form */
+.data-entry-form {
+    display: flex; /* Stack form groups vertically on mobile */
+    flex-direction: column;
+    gap: 0.75rem;
+    background: #f8fafc;
+    padding: 1rem;
+    border-radius: 8px;
+}
+.form-group { text-align: left; }
+.form-group label { display: block; font-size: 0.875rem; color: #64748b; margin-bottom: 0.25rem; }
+
+/* Video Placeholder */
+.video-box { 
+    background: #000; 
+    color: white; 
+    aspect-ratio: 16/9; 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center; 
+    align-items: center; 
+    border-radius: 12px; 
+    margin-top: 2rem; 
+}
+
+/* --- Media Queries for Tablet/Desktop (>= 768px) --- */
+@media (min-width: 768px) {
+    /* Navbar */
+    .navbar {
+        padding: 1rem 2rem;
+    }
+
+    .nav-links {
+        display: block; /* Show links on larger screens */
+    }
+
+    /* Layout */
+    .main-wrapper {
+        margin-top: 80px;
+        padding: 2rem;
+        min-height: calc(100vh - 80px);
+    }
+    
+    .card {
+        padding: 2rem;
+    }
+    
+    /* Dashboard: Revert to side-by-side layout */
+    .dashboard {
+        max-width: 1200px;
+        gap: 2rem;
+        flex-direction: row;
+    }
+
+    .sidebar {
+        flex: 0 0 250px;
+        flex-direction: column; /* Revert sidebar buttons to vertical stack */
+        overflow-x: visible;
+        padding-bottom: 0;
+    }
+
+    .sidebar button {
+        text-align: left;
+    }
+    
+    .content {
+        flex: 1;
+        min-width: 300px;
+    }
+    
+    /* Data Entry Form: Revert to two columns */
+    .data-entry-form {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        padding: 1.5rem;
+    }
+
+    /* Results Grid: Revert to two columns */
+    .results-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+    }
+    
+    /* Data Table: No overflow needed */
+    .data-table {
+        display: table;
+        overflow-x: visible;
+        white-space: normal;
+    }
+
+    .data-table table {
+        min-width: initial;
+    }
 }

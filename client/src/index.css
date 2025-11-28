@@ -1,52 +1,69 @@
-:root { --primary: #2563eb; --secondary: #475569; --bg: #f1f5f9; --card-bg: #ffffff; --success: #10b981; --error: #ef4444; }
+:root {
+    --primary: #2563eb;
+    --secondary: #475569;
+    --bg: #f1f5f9;
+    --card-bg: #ffffff;
+    --success: #10b981;
+    --error: #ef4444;
+}
 
-body { background-color: var(--bg); font-family: 'Inter', system-ui, sans-serif; margin: 0; color: #1e293b; }
+body {
+    background-color: var(--bg);
+    font-family: 'Inter', system-ui, sans-serif;
+    margin: 0;
+    color: #1e293b;
+}
 
-/* Navbar */
-.navbar { background: var(--primary); color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; position: fixed; width: 100%; top: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 1000; box-sizing: border-box; }
-.nav-brand { font-size: 1.5rem; font-weight: 700; }
-.nav-links a { color: white; text-decoration: none; margin-left: 1.5rem; font-weight: 500; transition: opacity 0.2s; }
-.nav-links a:hover { opacity: 0.8; }
-.logout-btn { background: rgba(255,255,255,0.2); border: none; color: white; margin-left: 1rem; }
+/* Base Root Styling (Responsive adjustment for full mobile width) */
+#root {
+    max-width: none;
+    padding: 0;
+    margin: 0;
+    text-align: center;
+    width: 100%;
+}
 
-/* Layout */
-.main-wrapper { margin-top: 80px; padding: 2rem; min-height: calc(100vh - 80px); }
-.card { background: var(--card-bg); padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+.logo {
+    height: 6em;
+    padding: 1.5em;
+    will-change: filter;
+    transition: filter 300ms;
+}
+.logo:hover {
+    filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+    filter: drop-shadow(0 0 2em #61dafbaa);
+}
 
-/* Dashboard */
-.dashboard { display: flex; gap: 2rem; max-width: 1200px; margin: 0 auto; flex-wrap: wrap; }
-.sidebar { flex: 0 0 250px; display: flex; flex-direction: column; gap: 0.5rem; }
-.sidebar button { text-align: left; background: white; border: 1px solid #e2e8f0; color: #475569; }
-.sidebar button.active { background: var(--primary); color: white; border-color: var(--primary); }
-.content { flex: 1; min-width: 300px; }
+@keyframes logo-spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
 
-/* Forms & Tables */
-input, select { width: 100%; padding: 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; margin-bottom: 1rem; box-sizing: border-box; font-size: 1rem; }
-button { background: var(--primary); color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 1rem; transition: background 0.2s; }
-button:hover { filter: brightness(110%); }
-button:disabled { opacity: 0.6; cursor: not-allowed; }
+@media (prefers-reduced-motion: no-preference) {
+    a:nth-of-type(2) .logo {
+        animation: logo-spin infinite 20s linear;
+    }
+}
 
-.danger-btn { background: var(--error); }
-.warning-btn { background: #f59e0b; }
-.add-btn { width: 100%; margin-top: 1rem; }
+.card {
+    padding: 2em;
+}
 
-.data-table { width: 100%; border-collapse: collapse; margin-top: 1.5rem; background: white; border-radius: 8px; overflow: hidden; }
-.data-table th { background: #f8fafc; color: #64748b; font-weight: 600; text-align: left; padding: 1rem; }
-.data-table td { padding: 1rem; border-bottom: 1px solid #e2e8f0; }
+.read-the-docs {
+    color: #888;
+}
 
-/* User Home */
-.home-container { max-width: 800px; margin: 0 auto; text-align: center; }
-.hero h1 { color: var(--primary); margin-bottom: 0.5rem; }
-.upload-section { margin: 2rem auto; max-width: 500px; }
-.results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 2rem; text-align: left; }
-.result-card.found { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; text-align: center; }
-.result-card.error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; text-align: center; }
-.direction-arrow { font-size: 2rem; font-weight: 800; margin: 1rem 0; }
-
-/* Data Entry Form */
-.data-entry-form { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; background: #f8fafc; padding: 1.5rem; border-radius: 8px; }
-.form-group { text-align: left; }
-.form-group label { display: block; font-size: 0.875rem; color: #64748b; margin-bottom: 0.25rem; }
-
-/* Video Placeholder */
-.video-box { background: #000; color: white; aspect-ratio: 16/9; display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 12px; margin-top: 2rem; }
+/* Media Query to restore desktop settings for #root */
+@media (min-width: 768px) {
+    #root {
+        max-width: 1280px;
+        padding: 2rem;
+        margin: 0 auto;
+    }
+}

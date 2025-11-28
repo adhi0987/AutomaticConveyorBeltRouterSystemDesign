@@ -140,15 +140,3 @@ docker run --rm -p 8000:8000 acbr-system
 
 - Fork the repo, open a branch, and submit PRs with clear descriptions.
 - Add tests for new routing strategies or bug fixes.
-
-## Contact & License
-
-- **Author / Maintainer**: See repository owner `adhi0987`.
-- This project is provided for educational and prototyping purposes. Replace test credentials before production use.
-
----
-
-If you want, I can:
-- run a quick local smoke test of the server and client (requires your environment), or
-- add a simple architecture diagram (ASCII or SVG) inside this README.
-
