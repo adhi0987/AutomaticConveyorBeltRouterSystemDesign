@@ -281,7 +281,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Smart Conveyor Belt System", lifespan=lifespan)
 
-origins = ["http://localhost:5173", "https://automaticconveyorbeltroutersystemdesign-l3l8.onrender.com","https://automaticconveyorbeltroutersystemdesign.onrender.com"]
+origins = ["http://localhost:5173", "https://automaticconveyorbeltroutersystemdesign-tt53.onrender.com","https://automaticconveyorbeltroutersystemdesign.onrender.com"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
