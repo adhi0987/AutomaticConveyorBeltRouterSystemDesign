@@ -24,6 +24,10 @@ import traceback
 # Load environment variables from the .env file
 load_dotenv()
 
+
+# explicitly set the path to the Tesseract executable
+pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+
 # Get the URL securely
 DATABASE_URL = os.getenv("DATABASE_URL")
 
